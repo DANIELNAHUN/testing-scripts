@@ -1,0 +1,12 @@
+# Dependencias para text_to_speech.py
+gTTS
+pyttsx3
+
+# Dependencias para pdf_to_text.py
+pdfplumber
+PyPDF2
+PyMuPDF
+
+# Dependencias para ebooks
+beautifulsoup4
+ebooklib
