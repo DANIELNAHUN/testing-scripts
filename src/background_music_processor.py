@@ -130,9 +130,9 @@ class BackgroundMusicProcessor:
         
         Aplica los siguientes efectos:
         - Recorta a la duración calculada (o usa duración completa si es menor)
-        - 20% volumen excepto últimos 5 segundos
-        - Fade de 20% a 100% comenzando 4 segundos antes del final
-        - 100% volumen al último segundo
+        - 20% volumen hasta 5 segundos antes del final
+        - Fade in de 20% a 100% en 1 segundo (de -5s a -4s)
+        - 100% volumen en los últimos 4 segundos
         
         Args:
             required_duration_ms: Duración requerida en milisegundos
@@ -174,28 +174,25 @@ class BackgroundMusicProcessor:
         
         # Definir puntos de tiempo en milisegundos
         fade_start = actual_duration_ms - 5000  # 5 segundos antes del final
-        fade_end = actual_duration_ms - 1000    # 1 segundo antes del final
+        fade_end = actual_duration_ms - 4000    # 4 segundos antes del final (1 segundo de fade)
         
         # Sección 1: Desde el inicio hasta 5 segundos antes del final a 20% volumen
         # 20% volumen = -14dB (20 * log10(0.20) ≈ -14dB)
         section_1 = audio[:fade_start]
         section_1_reduced = section_1 - 14.0
         
-        # Sección 2: Fade de 20% a 100% en los últimos 4 segundos (desde -5s hasta -1s)
-        section_2 = audio[fade_start:fade_end]
-        # Aplicar fade de -14dB (20%) a 0dB (100%)
-        section_2_faded = section_2.fade(from_gain=-14.0, to_gain=0.0, start=0, end=len(section_2))
+        # Sección 2: Fade in de 20% a 100% en 1 segundo + últimos 4 segundos a 100%
+        section_2 = audio[fade_start:]
+        # Aplicar fade de -14dB (20%) a 0dB (100%) solo en el primer segundo
+        fade_duration = 1000  # 1 segundo
+        section_2_faded = section_2.fade(from_gain=-14.0, to_gain=0.0, start=0, end=fade_duration)
         
-        # Sección 3: Último segundo a 100% volumen
-        section_3 = audio[fade_end:]
-        
-        # Concatenar todas las secciones
-        processed_audio = section_1_reduced + section_2_faded + section_3
+        # Concatenar ambas secciones
+        processed_audio = section_1_reduced + section_2_faded
         
         logger.info(f"Second background processed: duration={len(processed_audio)}ms")
         logger.debug(f"Section 1 (20%): 0-{fade_start}ms")
-        logger.debug(f"Section 2 (fade 20%-100%): {fade_start}-{fade_end}ms")
-        logger.debug(f"Section 3 (100%): {fade_end}-{actual_duration_ms}ms")
+        logger.debug(f"Section 2 (fade in 1s + 100%): {fade_start}-{actual_duration_ms}ms")
         
         return processed_audio
 

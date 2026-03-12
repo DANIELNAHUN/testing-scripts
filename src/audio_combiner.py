@@ -39,7 +39,8 @@ class AudioCombiner:
         Aplica los siguientes efectos:
         - Locutor inicia a los 5 segundos del fondo
         - Locutor mantiene 100% volumen
-        - Fondo musical hace fade a 100% cuando termina el locutor
+        - Fondo musical hace fade a 100% UN SEGUNDO ANTES de que termine el locutor
+        - El volumen máximo del fondo se mantiene hasta el final del audio
         
         Args:
             locutor: AudioSegment del locutor unificado
@@ -61,32 +62,56 @@ class AudioCombiner:
         locutor_end_position = self.LOCUTOR_START_OFFSET + locutor_duration_ms
         logger.info(f"Locutor will end at: {locutor_end_position}ms")
         
-        # Aplicar fade al fondo musical después de que termina el locutor
-        # El fondo debe hacer fade de su volumen actual a 100% después del locutor
-        if locutor_end_position < background_duration_ms:
-            # Dividir el fondo en dos partes: antes y después de que termina el locutor
-            background_before_fade = background[:locutor_end_position]
-            background_after_fade = background[locutor_end_position:]
+        # Calcular cuándo debe empezar el fade (1 segundo antes de que termine el locutor)
+        fade_start_advance_ms = 1000  # 1 segundo antes
+        fade_start_position = locutor_end_position - fade_start_advance_ms
+        
+        # Asegurar que el fade no empiece antes del inicio del locutor
+        if fade_start_position < self.LOCUTOR_START_OFFSET:
+            fade_start_position = self.LOCUTOR_START_OFFSET
+            logger.warning(f"Fade start adjusted to locutor start position: {fade_start_position}ms")
+        
+        logger.info(f"Background volume fade will start at: {fade_start_position}ms (1s before locutor ends)")
+        
+        # Aplicar incremento gradual de volumen al fondo musical
+        if fade_start_position < background_duration_ms:
+            # Dividir el fondo en tres partes: antes del fade, fade, y después del fade
+            background_before_fade = background[:fade_start_position]
+            background_fade_and_after = background[fade_start_position:]
             
-            # Aplicar fade in al segmento después del locutor (de volumen actual a 100%)
-            # Usamos fade para aumentar gradualmente el volumen a 0dB (100%)
-            fade_duration_ms = min(len(background_after_fade), 2000)  # Fade de 2 segundos o menos
-            background_after_fade = background_after_fade.fade(
-                from_gain=-12.0,  # Asumiendo que el fondo está a ~25% (-12dB)
-                to_gain=0.0,      # 100% volumen (0dB)
-                start=0,
-                end=fade_duration_ms
-            )
+            # Calcular duración del fade (desde 1s antes del final del locutor hasta el final del locutor)
+            fade_duration_ms = min(locutor_end_position - fade_start_position, len(background_fade_and_after))
             
-            # Reconstruir el fondo con el fade aplicado
-            background_with_fade = background_before_fade + background_after_fade
+            if fade_duration_ms > 0 and len(background_fade_and_after) > 0:
+                # Dividir el segmento de fade y después en dos partes
+                if len(background_fade_and_after) > fade_duration_ms:
+                    fade_segment = background_fade_and_after[:fade_duration_ms]
+                    remaining_segment = background_fade_and_after[fade_duration_ms:]
+                else:
+                    fade_segment = background_fade_and_after
+                    remaining_segment = AudioSegment.silent(duration=0)
+                
+                # Aplicar fade in gradual al segmento de fade (de volumen actual a +3dB)
+                fade_segment = fade_segment.fade_in(len(fade_segment))
+                
+                # Aumentar el volumen del resto del segmento en +3dB para mayor presencia
+                # Este segmento se mantiene con volumen alto hasta el final
+                if len(remaining_segment) > 0:
+                    remaining_segment = remaining_segment + 3.0  # +3dB de incremento
+                
+                # Reconstruir el segmento de fade y después
+                background_fade_and_after = fade_segment + remaining_segment
             
-            logger.info(f"Applied fade to background from {locutor_end_position}ms to {locutor_end_position + fade_duration_ms}ms")
+            # Reconstruir el fondo completo con el fade aplicado
+            background_with_fade = background_before_fade + background_fade_and_after
+            
+            logger.info(f"Applied volume fade to background from {fade_start_position}ms to {fade_start_position + fade_duration_ms}ms")
+            logger.info(f"High volume maintained from {fade_start_position + fade_duration_ms}ms to end of audio")
         else:
             background_with_fade = background
             logger.warning(
-                f"Locutor ends at or after background ends "
-                f"({locutor_end_position}ms >= {background_duration_ms}ms). "
+                f"Fade start position is at or after background ends "
+                f"({fade_start_position}ms >= {background_duration_ms}ms). "
                 f"No fade applied to background."
             )
         
@@ -181,4 +206,3 @@ class AudioCombiner:
             logger.warning("Duration validation failed - see warnings above")
 
         return validation_passed
-

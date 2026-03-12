@@ -78,7 +78,10 @@ class AudioProcessor:
             
             # Etapa 2: Procesar locutor
             logger.info("Stage 2: Processing locutor audio")
-            locutor_result = self.locutor_processor.unify_locutor_audio()
+            locutor_result = self.locutor_processor.unify_locutor_audio(
+                export_path=Path('files/output'),
+                export_filename='locutor_unido'
+            )
             
             # Validar que al menos un archivo de locutor fue cargado
             if not locutor_result.files_loaded:
