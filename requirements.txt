@@ -2,3 +2,6 @@ pydub==0.25.1
 pytest==7.4.3
 hypothesis==6.92.1
 mutagen==1.47.0
+requests==2.31.0
+load_dotenv
+elevenlabs
